@@ -18573,6 +18573,253 @@ cr.plugins_.Multiplayer = function(runtime)
 }());
 ;
 ;
+cr.plugins_.Rex_XMLWriter = function(runtime)
+{
+	this.runtime = runtime;
+};
+(function ()
+{
+	var pluginProto = cr.plugins_.Rex_XMLWriter.prototype;
+	pluginProto.Type = function(plugin)
+	{
+		this.plugin = plugin;
+		this.runtime = plugin.runtime;
+	};
+	var typeProto = pluginProto.Type.prototype;
+	typeProto.onCreate = function()
+	{
+	};
+	pluginProto.Instance = function(type)
+	{
+		this.type = type;
+		this.runtime = type.runtime;
+	};
+	var instanceProto = pluginProto.Instance.prototype;
+	instanceProto.onCreate = function()
+	{
+        if (!this.recycled)
+        {
+            this.xw = new XMLWriter( 'UTF-8', '1.0' );
+        }
+        this.clean();
+	};
+	instanceProto.onDestroy = function ()
+	{
+        this.clean();
+	};
+	instanceProto.clean = function()
+	{
+        this.xw.close();
+        this.level = null;
+	};
+    instanceProto.get_output = function(is_prettyPrint)
+    {
+        this.xw.formatting = (is_prettyPrint)? 'indented':'none';
+        return this.xw.flush();
+    };
+	instanceProto.saveToJSON = function ()
+	{
+		return { "xw": this.xw.saveToJSON(),
+                };
+	};
+	instanceProto.loadFromJSON = function (o)
+	{
+        this.xw.loadFromJSON(o["xw"]);
+	};
+	function Cnds() {};
+	pluginProto.cnds = new Cnds();
+	Cnds.prototype.AddElement = function (name)
+	{
+        if (this.level === null)
+        {
+            this.clean();
+            this.xw.writeStartDocument();
+            this.level = 0;
+        }
+        this.xw.writeStartElement(name);
+        this.level += 1;
+        var current_frame = this.runtime.getCurrentEventStack();
+        var current_event = current_frame.current_event;
+		var solModifierAfterCnds = current_frame.isModifierAfterCnds();
+        if (solModifierAfterCnds)
+            this.runtime.pushCopySol(current_event.solModifiers);
+        current_event.retrigger();
+        if (solModifierAfterCnds)
+            this.runtime.popSol(current_event.solModifiers);
+        this.xw.writeEndElement();
+        this.level -= 1;
+        if (this.level === 0)
+        {
+            this.level = null;
+        }
+		return false;
+	};
+	function Acts() {};
+	pluginProto.acts = new Acts();
+    Acts.prototype.Clean = function ()
+	{
+        this.clean();
+	};
+    Acts.prototype.AddAttribute = function (k_, v_)
+	{
+;
+        this.xw.writeAttributeString(k_, v_.toString());
+	};
+    Acts.prototype.SetContent = function (content_)
+	{
+;
+        this.xw.writeString(content_.toString());
+	};
+	function Exps() {};
+	pluginProto.exps = new Exps();
+    Exps.prototype.AsXML = function (ret)
+	{
+	    ret.set_string( this.get_output() );
+	};
+    Exps.prototype.AsPrettyPrintXML = function (ret)
+	{
+	    ret.set_string( this.get_output(true) );
+	};
+/**
+ * XMLWriter - XML generator for Javascript, based on .NET's XMLTextWriter.
+ * Copyright (c) 2008 Ariel Flesler - aflesler(at)gmail(dot)com | http://flesler.blogspot.com
+ * Licensed under BSD (http://www.opensource.org/licenses/bsd-license.php)
+ * Date: 3/12/2008
+ * @version 1.0.0
+ * @author Ariel Flesler
+ * http://flesler.blogspot.com/2008/03/xmlwriter-for-javascript.html
+ */
+function XMLWriter( encoding, version ){
+	if( encoding )
+		this.encoding = encoding;
+	if( version )
+		this.version = version;
+};
+(function(){
+XMLWriter.prototype = {
+	encoding:'ISO-8859-1',// what is the encoding
+	version:'1.0', //what xml version to use
+	formatting: 'indented', //how to format the output (indented/none)  ?
+	indentChar:'\t', //char to use for indent
+	indentation: 1, //how many indentChar to add per level
+	newLine: '\n', //character to separate nodes when formatting
+	writeStartDocument:function( standalone ){
+		this.close();//cleanup
+		this.stack = [ ];
+		this.standalone = standalone;
+	},
+	writeEndDocument:function(){
+		this.active = this.root;
+		this.stack = [ ];
+	},
+	writeDocType:function( dt ){
+		this.doctype = dt;
+	},
+	writeStartElement:function( name, ns ){
+		if( ns )//namespace
+			name = ns + ':' + name;
+		var node = { "n":name, "a":{ }, "c": [ ] };//(n)ame, (a)ttributes, (c)hildren
+		if( this.active ){
+			this.active["c"].push(node);
+			this.stack.push(this.active);
+		}else
+			this.root = node;
+		this.active = node;
+	},
+	writeEndElement:function(){
+		this.active = this.stack.pop() || this.root;
+	},
+	writeAttributeString:function( name, value ){
+		if( this.active )
+			this.active["a"][name] = value;
+	},
+	writeString:function( text ){
+		if( this.active )
+			this.active["c"].push(text);
+	},
+	writeElementString:function( name, text, ns ){
+		this.writeStartElement( name, ns );
+		this.writeString( text );
+		this.writeEndElement();
+	},
+	writeCDATA:function( text ){
+		this.writeString( '<![CDATA[' + text + ']]>' );
+	},
+	writeComment:function( text ){
+		this.writeString('<!-- ' + text + ' -->');
+	},
+	flush:function(){
+		if( this.stack && this.stack[0] )//ensure it's closed
+			this.writeEndDocument();
+		var
+			chr = '', indent = '', num = this.indentation,
+			formatting = this.formatting.toLowerCase() == 'indented',
+			buffer = '<?xml version="'+this.version+'" encoding="'+this.encoding+'"';
+		if( this.standalone !== undefined )
+			buffer += ' standalone="'+!!this.standalone+'"';
+		buffer += ' ?>';
+		buffer = [buffer];
+		if( this.doctype && this.root )
+			buffer.push('<!DOCTYPE '+ this.root["n"] + ' ' + this.doctype+'>');
+		if( formatting ){
+			while( num-- )
+				chr += this.indentChar;
+		}
+		if( this.root )//skip if no element was added
+			format( this.root, indent, chr, buffer );
+		return buffer.join( formatting ? this.newLine : '' );
+	},
+	close:function(){
+		if( this.root )
+			clean( this.root );
+		this.active = this.root = this.stack = null;
+	},
+	saveToJSON: function ()
+	{
+		return { "root": this.root,
+                };
+	},
+	loadFromJSON: function (o)
+	{
+        this.root = o["root"];
+        this.writeEndDocument();
+	},
+};
+function clean( node ){
+	var l = node["c"].length;
+	while( l-- ){
+		if( typeof node["c"][l] == 'object' )
+			clean( node["c"][l] );
+	}
+	node["n"] = node["a"] = node["c"] = null;
+};
+function format( node, indent, chr, buffer ){
+	var
+		xml = indent + '<' + node["n"],
+		nc = node["c"].length,
+		attr, child, i = 0;
+	for( attr in node.a )
+		xml += ' ' + attr + '="' + node["a"][attr] + '"';
+	xml += nc ? '>' : ' />';
+	buffer.push( xml );
+	if( nc ){
+		do{
+			child = node["c"][i++];
+			if( typeof child == 'string' ){
+				if( nc == 1 )//single text node
+					return buffer.push( buffer.pop() + child + '</'+node["n"]+'>' );
+				else //regular text node
+					buffer.push( indent+chr+child );
+			}else if( typeof child == 'object' ) //element node
+				format(child, indent+chr, chr, buffer);
+		}while( i < nc );
+		buffer.push( indent + '</'+node["n"]+'>' );
+	}
+};
+})();
+})();
+;
+;
 cr.plugins_.Text = function(runtime)
 {
 	this.runtime = runtime;
@@ -19517,6 +19764,427 @@ cr.plugins_.TextBox = function(runtime)
 	};
 	pluginProto.exps = new Exps();
 }());
+;
+;
+cr.plugins_.TiledBg = function(runtime)
+{
+	this.runtime = runtime;
+};
+(function ()
+{
+	var pluginProto = cr.plugins_.TiledBg.prototype;
+	pluginProto.Type = function(plugin)
+	{
+		this.plugin = plugin;
+		this.runtime = plugin.runtime;
+	};
+	var typeProto = pluginProto.Type.prototype;
+	typeProto.onCreate = function()
+	{
+		if (this.is_family)
+			return;
+		this.texture_img = new Image();
+		this.texture_img.cr_filesize = this.texture_filesize;
+		this.runtime.waitForImageLoad(this.texture_img, this.texture_file);
+		this.pattern = null;
+		this.webGL_texture = null;
+	};
+	typeProto.onLostWebGLContext = function ()
+	{
+		if (this.is_family)
+			return;
+		this.webGL_texture = null;
+	};
+	typeProto.onRestoreWebGLContext = function ()
+	{
+		if (this.is_family || !this.instances.length)
+			return;
+		if (!this.webGL_texture)
+		{
+			this.webGL_texture = this.runtime.glwrap.loadTexture(this.texture_img, true, this.runtime.linearSampling, this.texture_pixelformat);
+		}
+		var i, len;
+		for (i = 0, len = this.instances.length; i < len; i++)
+			this.instances[i].webGL_texture = this.webGL_texture;
+	};
+	typeProto.loadTextures = function ()
+	{
+		if (this.is_family || this.webGL_texture || !this.runtime.glwrap)
+			return;
+		this.webGL_texture = this.runtime.glwrap.loadTexture(this.texture_img, true, this.runtime.linearSampling, this.texture_pixelformat);
+	};
+	typeProto.unloadTextures = function ()
+	{
+		if (this.is_family || this.instances.length || !this.webGL_texture)
+			return;
+		this.runtime.glwrap.deleteTexture(this.webGL_texture);
+		this.webGL_texture = null;
+	};
+	typeProto.preloadCanvas2D = function (ctx)
+	{
+		ctx.drawImage(this.texture_img, 0, 0);
+	};
+	pluginProto.Instance = function(type)
+	{
+		this.type = type;
+		this.runtime = type.runtime;
+	};
+	var instanceProto = pluginProto.Instance.prototype;
+	instanceProto.onCreate = function()
+	{
+		this.visible = (this.properties[0] === 0);							// 0=visible, 1=invisible
+		this.rcTex = new cr.rect(0, 0, 0, 0);
+		this.has_own_texture = false;										// true if a texture loaded in from URL
+		this.texture_img = this.type.texture_img;
+		if (this.runtime.glwrap)
+		{
+			this.type.loadTextures();
+			this.webGL_texture = this.type.webGL_texture;
+		}
+		else
+		{
+			if (!this.type.pattern)
+				this.type.pattern = this.runtime.ctx.createPattern(this.type.texture_img, "repeat");
+			this.pattern = this.type.pattern;
+		}
+	};
+	instanceProto.afterLoad = function ()
+	{
+		this.has_own_texture = false;
+		this.texture_img = this.type.texture_img;
+	};
+	instanceProto.onDestroy = function ()
+	{
+		if (this.runtime.glwrap && this.has_own_texture && this.webGL_texture)
+		{
+			this.runtime.glwrap.deleteTexture(this.webGL_texture);
+			this.webGL_texture = null;
+		}
+	};
+	instanceProto.draw = function(ctx)
+	{
+		ctx.globalAlpha = this.opacity;
+		ctx.save();
+		ctx.fillStyle = this.pattern;
+		var myx = this.x;
+		var myy = this.y;
+		if (this.runtime.pixel_rounding)
+		{
+			myx = Math.round(myx);
+			myy = Math.round(myy);
+		}
+		var drawX = -(this.hotspotX * this.width);
+		var drawY = -(this.hotspotY * this.height);
+		var offX = drawX % this.texture_img.width;
+		var offY = drawY % this.texture_img.height;
+		if (offX < 0)
+			offX += this.texture_img.width;
+		if (offY < 0)
+			offY += this.texture_img.height;
+		ctx.translate(myx, myy);
+		ctx.rotate(this.angle);
+		ctx.translate(offX, offY);
+		ctx.fillRect(drawX - offX,
+					 drawY - offY,
+					 this.width,
+					 this.height);
+		ctx.restore();
+	};
+	instanceProto.drawGL_earlyZPass = function(glw)
+	{
+		this.drawGL(glw);
+	};
+	instanceProto.drawGL = function(glw)
+	{
+		glw.setTexture(this.webGL_texture);
+		glw.setOpacity(this.opacity);
+		var rcTex = this.rcTex;
+		rcTex.right = this.width / this.texture_img.width;
+		rcTex.bottom = this.height / this.texture_img.height;
+		var q = this.bquad;
+		if (this.runtime.pixel_rounding)
+		{
+			var ox = Math.round(this.x) - this.x;
+			var oy = Math.round(this.y) - this.y;
+			glw.quadTex(q.tlx + ox, q.tly + oy, q.trx + ox, q.try_ + oy, q.brx + ox, q.bry + oy, q.blx + ox, q.bly + oy, rcTex);
+		}
+		else
+			glw.quadTex(q.tlx, q.tly, q.trx, q.try_, q.brx, q.bry, q.blx, q.bly, rcTex);
+	};
+	function Cnds() {};
+	Cnds.prototype.OnURLLoaded = function ()
+	{
+		return true;
+	};
+	pluginProto.cnds = new Cnds();
+	function Acts() {};
+	Acts.prototype.SetEffect = function (effect)
+	{
+		this.blend_mode = effect;
+		this.compositeOp = cr.effectToCompositeOp(effect);
+		cr.setGLBlend(this, effect, this.runtime.gl);
+		this.runtime.redraw = true;
+	};
+	Acts.prototype.LoadURL = function (url_, crossOrigin_)
+	{
+		var img = new Image();
+		var self = this;
+		img.onload = function ()
+		{
+			self.texture_img = img;
+			if (self.runtime.glwrap)
+			{
+				if (self.has_own_texture && self.webGL_texture)
+					self.runtime.glwrap.deleteTexture(self.webGL_texture);
+				self.webGL_texture = self.runtime.glwrap.loadTexture(img, true, self.runtime.linearSampling);
+			}
+			else
+			{
+				self.pattern = self.runtime.ctx.createPattern(img, "repeat");
+			}
+			self.has_own_texture = true;
+			self.runtime.redraw = true;
+			self.runtime.trigger(cr.plugins_.TiledBg.prototype.cnds.OnURLLoaded, self);
+		};
+		if (url_.substr(0, 5) !== "data:" && crossOrigin_ === 0)
+			img.crossOrigin = "anonymous";
+		this.runtime.setImageSrc(img, url_);
+	};
+	pluginProto.acts = new Acts();
+	function Exps() {};
+	Exps.prototype.ImageWidth = function (ret)
+	{
+		ret.set_float(this.texture_img.width);
+	};
+	Exps.prototype.ImageHeight = function (ret)
+	{
+		ret.set_float(this.texture_img.height);
+	};
+	pluginProto.exps = new Exps();
+}());
+;
+;
+cr.plugins_.XML = function(runtime)
+{
+	this.runtime = runtime;
+	if (this.runtime.isIE)
+	{
+		var x = {};
+		window["XPathResult"] = x;
+		x.NUMBER_TYPE = 1;
+		x.STRING_TYPE = 2;
+		x.UNORDERED_NODE_SNAPSHOT_TYPE = 6;
+		x.ORDERED_NODE_SNAPSHOT_TYPE = 7;
+	}
+};
+(function ()
+{
+	var pluginProto = cr.plugins_.XML.prototype;
+	pluginProto.Type = function(plugin)
+	{
+		this.plugin = plugin;
+		this.runtime = plugin.runtime;
+	};
+	var typeProto = pluginProto.Type.prototype;
+	typeProto.onCreate = function()
+	{
+	};
+	pluginProto.Instance = function(type)
+	{
+		this.type = type;
+		this.runtime = type.runtime;
+	};
+	var instanceProto = pluginProto.Instance.prototype;
+	instanceProto.onCreate = function()
+	{
+		this.xmlDoc = null;
+		this.nodeStack = [];
+		if (this.runtime.isDomFree)
+			cr.logexport("[Construct 2] The XML object is not supported on this platform.");
+	};
+	instanceProto.xpath_eval_one = function(xpath, result_type)
+	{
+		if (!this.xmlDoc)
+			return;
+		var root = this.nodeStack.length ? this.nodeStack[this.nodeStack.length - 1] : this.xmlDoc.documentElement;
+		try {
+			if (this.runtime.isIE)
+				return root.selectSingleNode(xpath);
+			else
+				return this.xmlDoc.evaluate(xpath, root, null, result_type, null);
+		}
+		catch (e) { return null; }
+	};
+	instanceProto.xpath_eval_many = function(xpath, result_type)
+	{
+		if (!this.xmlDoc)
+			return;
+		var root = this.nodeStack.length ? this.nodeStack[this.nodeStack.length - 1] : this.xmlDoc.documentElement;
+		try {
+			if (this.runtime.isIE)
+				return root.selectNodes(xpath);
+			else
+				return this.xmlDoc.evaluate(xpath, root, null, result_type, null);
+		}
+		catch (e) { return null; }
+	};
+	function Cnds() {};
+	instanceProto.doForEachIteration = function (current_event, item)
+	{
+		this.nodeStack.push(item);
+		this.runtime.pushCopySol(current_event.solModifiers);
+		current_event.retrigger();
+		this.runtime.popSol(current_event.solModifiers);
+		this.nodeStack.pop();
+	};
+	Cnds.prototype.ForEach = function (xpath)
+	{
+		if (this.runtime.isDomFree)
+			return false;
+		var current_event = this.runtime.getCurrentEventStack().current_event;
+		var result = this.xpath_eval_many(xpath, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE);
+		var i, len, x;
+		if (!result)
+			return false;
+		else
+		{
+			var current_loop = this.runtime.pushLoopStack();
+			if (this.runtime.isIE)
+			{
+				for (i = 0, len = result.length; i < len; i++)
+				{
+					current_loop.index = i;
+					this.doForEachIteration(current_event, result[i]);
+				}
+			}
+			else
+			{
+				for (i = 0, len = result.snapshotLength; i < len; i++)
+				{
+					current_loop.index = i;
+					this.doForEachIteration(current_event, result.snapshotItem(i));
+				}
+			}
+			this.runtime.popLoopStack();
+		}
+		return false;
+	};
+	pluginProto.cnds = new Cnds();
+	function Acts() {};
+	Acts.prototype.Load = function (str)
+	{
+		if (this.runtime.isDomFree)
+			return;
+		var xml, tmp;
+		var isWindows8 = !!(typeof window["c2isWindows8"] !== "undefined" && window["c2isWindows8"]);
+		try {
+			if (isWindows8)
+	        {
+	            xml = new Windows["Data"]["Xml"]["Dom"]["XmlDocument"]()
+	            xml["loadXml"](str);
+	        }
+			else if (this.runtime.isIE)
+			{
+				var versions = ["MSXML2.DOMDocument.6.0",
+                        "MSXML2.DOMDocument.3.0",
+                        "MSXML2.DOMDocument"];
+				for (var i = 0; i < 3; i++){
+					try {
+						xml = new ActiveXObject(versions[i]);
+						if (xml)
+							break;
+					} catch (ex){
+						xml = null;
+					}
+				}
+				if (xml)
+				{
+					xml.async = "false";
+					xml["loadXML"](str);
+				}
+			}
+			else {
+				tmp = new DOMParser();
+				xml = tmp.parseFromString(str, "text/xml");
+			}
+		} catch(e) {
+			xml = null;
+		}
+		if (xml)
+		{
+			this.xmlDoc = xml;
+			if (this.runtime.isIE && !isWindows8)
+				this.xmlDoc["setProperty"]("SelectionLanguage","XPath");
+		}
+	};
+	pluginProto.acts = new Acts();
+	function Exps() {};
+	Exps.prototype.NumberValue = function (ret, xpath)
+	{
+		if (this.runtime.isDomFree)
+		{
+			ret.set_int(0);
+			return;
+		}
+		var result = this.xpath_eval_one(xpath, XPathResult.NUMBER_TYPE);
+		if (!result)
+			ret.set_int(0);
+		else if (this.runtime.isIE)
+			ret.set_int(parseInt(result.nodeValue, 10));
+		else
+			ret.set_int(result.numberValue || 0);
+	};
+	Exps.prototype.StringValue = function (ret, xpath)
+	{
+		if (this.runtime.isDomFree)
+		{
+			ret.set_string("");
+			return;
+		}
+		var result;
+		if (/firefox/i.test(navigator.userAgent))
+		{
+			result = this.xpath_eval_one(xpath, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE);
+			if (!result)
+				ret.set_string("");
+			else
+			{
+				var i, len, totalstr = "";
+				for (i = 0, len = result.snapshotLength; i < len; i++)
+				{
+					totalstr += result.snapshotItem(i).textContent;
+				}
+				ret.set_string(totalstr);
+			}
+		}
+		else
+		{
+			result = this.xpath_eval_one(xpath, XPathResult.STRING_TYPE);
+			if (!result)
+				ret.set_string("");
+			else if (this.runtime.isIE)
+				ret.set_string((result.nodeValue || result.nodeTypedValue) || "");
+			else
+				ret.set_string(result.stringValue || "");
+		}
+	};
+	Exps.prototype.NodeCount = function (ret, xpath)
+	{
+		if (this.runtime.isDomFree)
+		{
+			ret.set_int(0);
+			return;
+		}
+		var result = this.xpath_eval_many(xpath, XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE);
+		if (!result)
+			ret.set_int(0);
+		else if (this.runtime.isIE)
+			ret.set_int(result.length || 0);
+		else
+			ret.set_int(result.snapshotLength || 0);
+	};
+	pluginProto.exps = new Exps();
+}());
 cr.getObjectRefTable = function () { return [
 	cr.plugins_.Browser,
 	cr.plugins_.Button,
@@ -19525,7 +20193,10 @@ cr.getObjectRefTable = function () { return [
 	cr.plugins_.Multiplayer,
 	cr.plugins_.List,
 	cr.plugins_.Text,
+	cr.plugins_.TiledBg,
 	cr.plugins_.TextBox,
+	cr.plugins_.Rex_XMLWriter,
+	cr.plugins_.XML,
 	cr.system_object.prototype.cnds.OnLayoutStart,
 	cr.plugins_.TextBox.prototype.acts.SetFocus,
 	cr.plugins_.Multiplayer.prototype.cnds.IsSupported,
@@ -19542,12 +20213,21 @@ cr.getObjectRefTable = function () { return [
 	cr.plugins_.TextBox.prototype.exps.Text,
 	cr.system_object.prototype.acts.GoToLayout,
 	cr.plugins_.Browser.prototype.acts.GoToURLWindow,
+	cr.system_object.prototype.cnds.EveryTick,
+	cr.plugins_.TiledBg.prototype.acts.SetPos,
+	cr.system_object.prototype.exps.viewportright,
+	cr.plugins_.TiledBg.prototype.exps.LayerName,
+	cr.system_object.prototype.exps.viewportbottom,
+	cr.plugins_.TiledBg.prototype.acts.SetSize,
+	cr.plugins_.TiledBg.prototype.exps.Width,
+	cr.plugins_.TiledBg.prototype.exps.Height,
 	cr.system_object.prototype.cnds.IsGroupActive,
 	cr.plugins_.Function.prototype.cnds.OnFunction,
 	cr.plugins_.TextBox.prototype.acts.SetText,
 	cr.system_object.prototype.exps.newline,
 	cr.plugins_.Function.prototype.exps.Param,
 	cr.plugins_.TextBox.prototype.acts.ScrollToBottom,
+	cr.plugins_.Rex_XMLWriter.prototype.acts.SetContent,
 	cr.plugins_.Multiplayer.prototype.acts.SignallingConnect,
 	cr.plugins_.Multiplayer.prototype.cnds.OnSignallingConnected,
 	cr.plugins_.Function.prototype.acts.CallFunction,
