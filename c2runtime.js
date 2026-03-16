@@ -22049,7 +22049,9 @@ cr.getObjectRefTable = function () { return [
 	cr.plugins_.Multiplayer.prototype.exps.FromID,
 	cr.plugins_.Browser.prototype.acts.Reload,
 	cr.plugins_.filechooser.prototype.cnds.OnChanged,
-	cr.plugins_.Sprite.prototype.acts.LoadURL,
 	cr.plugins_.filechooser.prototype.exps.FileURLAt,
-	cr.plugins_.Multiplayer.prototype.acts.SyncObject
+	cr.plugins_.Sprite.prototype.acts.LoadURL,
+	cr.plugins_.Multiplayer.prototype.acts.SyncObject,
+	cr.plugins_.TextBox.prototype.acts.SetCSSStyle,
+	cr.plugins_.List.prototype.acts.SetCSSStyle
 ];};
